@@ -1,0 +1,93 @@
+{
+  "info": {
+    "name": "TrackNow-Lite API",
+    "description": "Affiliate click/conversion tracking + auto-escalated support tickets. Run 'npm run seed && npm start' locally, base URL http://localhost:3000",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "tracking_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "List affiliates",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/affiliates"
+      }
+    },
+    {
+      "name": "Register a click (get tracking_id)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "if (json.tracking_id) { pm.collectionVariables.set('tracking_id', json.tracking_id); }"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/clicks",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"affiliate_id\": 1,\n  \"target_url\": \"https://merchant-site.example/checkout\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Send conversion webhook (valid tracking_id)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/webhook/conversion",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tracking_id\": \"{{tracking_id}}\",\n  \"order_id\": \"ORD-1042\",\n  \"amount\": 49.90\n}"
+        }
+      }
+    },
+    {
+      "name": "Send conversion webhook (unmatched -> auto ticket)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/webhook/conversion",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tracking_id\": \"this-id-does-not-exist\",\n  \"order_id\": \"ORD-9999\",\n  \"amount\": 15.00\n}"
+        }
+      }
+    },
+    {
+      "name": "Get affiliate performance stats",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/stats"
+      }
+    },
+    {
+      "name": "List support tickets",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/tickets"
+      }
+    },
+    {
+      "name": "Update ticket status",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/tickets/1",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"resolved\"\n}"
+        }
+      }
+    }
+  ]
+}

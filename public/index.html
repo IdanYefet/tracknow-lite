@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>TrackNow-Lite Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --navy: #1f3864;
+    --gray: #555;
+    --lightgray: #f4f5f7;
+    --border: #e2e4e8;
+    --ok: #1a7f37;
+    --warn: #b8860b;
+    --danger: #c62828;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--lightgray);
+    margin: 0;
+    color: #222;
+  }
+  header {
+    background: var(--navy);
+    color: white;
+    padding: 20px 32px;
+  }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity: .8; }
+  main { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
+  .card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+  .card h2 { margin-top: 0; font-size: 16px; color: var(--navy); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--gray); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  .pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill.open { background: #fdecea; color: var(--danger); }
+  .pill.in_progress { background: #fff4d9; color: var(--warn); }
+  .pill.resolved { background: #e6f4ea; color: var(--ok); }
+  select { font-size: 13px; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border); }
+  form { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 4px; }
+  label { display: flex; flex-direction: column; font-size: 12px; color: var(--gray); gap: 4px; }
+  input, select.form-input {
+    padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; min-width: 160px;
+  }
+  button {
+    background: var(--navy); color: white; border: none; padding: 8px 14px;
+    border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  button:hover { opacity: .9; }
+  .muted { color: var(--gray); font-size: 12px; }
+  .response-box {
+    margin-top: 10px; background: #0d1b2a; color: #a7f3d0; font-family: monospace;
+    font-size: 12px; padding: 10px; border-radius: 6px; white-space: pre-wrap; max-height: 160px; overflow: auto;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>TrackNow-Lite</h1>
+  <p>Affiliate click &amp; conversion tracking, with auto-escalation to support tickets on integration failures</p>
+</header>
+
+<main>
+
+  <div class="card">
+    <h2>1. Simulate an affiliate click</h2>
+    <p class="muted">Generates a tracking_id, the way a real tracking link click would.</p>
+    <form id="clickForm">
+      <label>Affiliate
+        <select id="affiliateSelect" class="form-input"></select>
+      </label>
+      <label>Target URL
+        <input id="targetUrl" placeholder="https://merchant-site.example/product/42" value="https://merchant-site.example/checkout" />
+      </label>
+      <button type="submit">Register click</button>
+    </form>
+    <div id="clickResult" class="response-box" style="display:none"></div>
+  </div>
+
+  <div class="card">
+    <h2>2. Simulate a merchant conversion webhook</h2>
+    <p class="muted">Paste a tracking_id from step 1 to record a real conversion — or leave it blank / made-up to see the auto-ticket flow.</p>
+    <form id="webhookForm">
+      <label>tracking_id
+        <input id="trackingIdInput" placeholder="paste tracking_id or leave random" />
+      </label>
+      <label>Order ID
+        <input id="orderIdInput" placeholder="ORD-1042" value="ORD-1042" />
+      </label>
+      <label>Amount ($)
+        <input id="amountInput" placeholder="49.90" value="49.90" />
+      </label>
+      <button type="submit">Send webhook</button>
+    </form>
+    <div id="webhookResult" class="response-box" style="display:none"></div>
+  </div>
+
+  <div class="card">
+    <h2>Affiliate performance</h2>
+    <table id="statsTable">
+      <thead><tr><th>Affiliate</th><th>Clicks</th><th>Conversions</th><th>Conv. rate</th><th>Revenue</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Support tickets</h2>
+    <table id="ticketsTable">
+      <thead><tr><th>#</th><th>Subject</th><th>Priority</th><th>Status</th><th>Created</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+</main>
+
+<script>
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  return res.json();
+}
+
+async function loadAffiliates() {
+  const affiliates = await api('/api/affiliates');
+  const select = document.getElementById('affiliateSelect');
+  select.innerHTML = affiliates.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+}
+
+async function loadStats() {
+  const stats = await api('/api/stats');
+  const tbody = document.querySelector('#statsTable tbody');
+  tbody.innerHTML = stats.map(s => `
+    <tr>
+      <td>${s.affiliate_name}</td>
+      <td>${s.clicks}</td>
+      <td>${s.conversions}</td>
+      <td>${s.conversion_rate}%</td>
+      <td>$${s.revenue.toFixed(2)}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" class="muted">No data yet — register a click to get started.</td></tr>';
+}
+
+async function loadTickets() {
+  const tickets = await api('/api/tickets');
+  const tbody = document.querySelector('#ticketsTable tbody');
+  tbody.innerHTML = tickets.map(t => `
+    <tr>
+      <td>#${t.id}</td>
+      <td>${t.subject}</td>
+      <td>${t.priority}</td>
+      <td>
+        <select class="form-input" data-id="${t.id}" onchange="updateTicket(this)">
+          <option value="open" ${t.status==='open'?'selected':''}>Open</option>
+          <option value="in_progress" ${t.status==='in_progress'?'selected':''}>In progress</option>
+          <option value="resolved" ${t.status==='resolved'?'selected':''}>Resolved</option>
+        </select>
+      </td>
+      <td>${new Date(t.created_at).toLocaleString()}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" class="muted">No tickets — clean integration record.</td></tr>';
+}
+
+async function updateTicket(select) {
+  const id = select.dataset.id;
+  await fetch(`/api/tickets/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: select.value })
+  });
+  loadTickets();
+}
+
+document.getElementById('clickForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const affiliate_id = document.getElementById('affiliateSelect').value;
+  const target_url = document.getElementById('targetUrl').value;
+  const result = await api('/api/clicks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ affiliate_id: Number(affiliate_id), target_url })
+  });
+  const box = document.getElementById('clickResult');
+  box.style.display = 'block';
+  box.textContent = JSON.stringify(result, null, 2);
+  if (result.tracking_id) document.getElementById('trackingIdInput').value = result.tracking_id;
+  loadStats();
+});
+
+document.getElementById('webhookForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const tracking_id = document.getElementById('trackingIdInput').value || crypto.randomUUID();
+  const order_id = document.getElementById('orderIdInput').value;
+  const amount = parseFloat(document.getElementById('amountInput').value);
+  const result = await api('/api/webhook/conversion', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tracking_id, order_id, amount })
+  });
+  const box = document.getElementById('webhookResult');
+  box.style.display = 'block';
+  box.textContent = JSON.stringify(result, null, 2);
+  loadStats();
+  loadTickets();
+});
+
+loadAffiliates();
+loadStats();
+loadTickets();
+</script>
+
+</body>
+</html>

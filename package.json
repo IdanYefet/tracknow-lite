@@ -1,0 +1,15 @@
+{
+  "name": "tracknow-lite",
+  "version": "1.0.0",
+  "description": "A lightweight affiliate tracking & support-ticket simulator, built to explore how an affiliate-tracking platform (like Tracknow) issues tracking links, receives conversion webhooks, and auto-escalates failed integrations to a support queue.",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node db/seed.js"
+  },
+  "license": "MIT"
+}
